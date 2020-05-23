@@ -72,8 +72,8 @@
 !
       XABS = DABS(XI)
       YABS = DABS(YI)
-      X    = XABS/6.3
-      Y    = YABS/4.4
+      X    = XABS/6.3d0
+      Y    = YABS/4.4d0
 !
 !
 !     THE FOLLOWING IF-STATEMENT PROTECTS

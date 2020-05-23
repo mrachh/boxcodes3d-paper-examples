@@ -51,10 +51,11 @@ c            the potential is non-zero only in the leaf boxes
 c
 
       implicit real *8 (a-h,o-z)
+      integer nd
       real *8 eps
       complex *16 zk,zk2
       integer nboxes,nlevels,ltree
-      integer itree(ltree),iptr(8),ncbox,npbox
+      integer itree(ltree),iptr(8),ncbox,npbox,ncc
       complex *16 fcoefs(ncbox,nboxes)
       complex *16 pot(npbox,nboxes)
       double precision boxsize(0:nlevels),centers(3,nboxes)
@@ -70,7 +71,7 @@ c
       double precision, allocatable :: wlege(:)
 
       double precision xtargtmp(3)
-      complex *16 pottmp,pottmpex
+      complex *16 pottmp,pottmpex,pottmp2
       character *1 type
       double precision, allocatable :: xnodes(:),wts(:)
 
@@ -96,7 +97,7 @@ c
       double complex, allocatable :: rdminus2(:,:,:),zeyep(:)
       double complex, allocatable :: rdplus2(:,:,:)
       double precision, allocatable :: zmone(:)
-      integer nn,nnn
+      integer nn,nnn,ii
   
       double complex, allocatable :: rlams(:),whts(:)
 
@@ -116,6 +117,7 @@ c
       double precision, allocatable :: rsc(:)
       integer, allocatable :: ilevrel(:)
       complex *16, allocatable :: mpcoefsmat(:,:),tab(:,:)
+      complex *16, allocatable :: mpcoefsmatall(:,:,:)
       complex *16, allocatable :: tabcoll(:,:,:),tabbtos(:,:,:),
      1   tabstob(:,:,:)
       complex *16, allocatable :: tabtmp(:,:),tamat(:,:)
@@ -137,24 +139,40 @@ c
       integer, allocatable :: ijboxlist(:,:)
       double precision timeinfo(8)
       double precision, allocatable :: ttabgen(:)
-      double precision tt1,tt2,tloctot
 
       integer iref(100),idimp(3,100),iflip(3,100)
+      integer irefbtos(100),idimpbtos(3,100),iflipbtos(3,100)
+      integer irefstob(100),idimpstob(3,100),iflipstob(3,100)
 
       integer cntlist4
-      double complex pgboxwexp(100)
+      integer, allocatable :: ilevlist4(:)
+      double complex, allocatable :: pgboxwexp(:,:,:,:)
+      double precision, allocatable :: fimat(:,:)
+
+      double complex, allocatable :: iboxlexp(:,:)
+      double precision iboxsubcenters(3,8)
+      double precision subcenters(3,8)
+      double precision iboxsrc(3,npbox)
+      double precision subpts(3,npbox)
+      double complex iboxpot(1,npbox)
+      integer iboxsrcind(npbox)
+      integer iboxfl(2,8)
 
       data ima/(0.0d0,1.0d0)/
+
+
+
+      ifprint = 1
 
       allocate(ttabgen(0:nlevels))
       do i=0,nlevels
         ttabgen(i) = 0
       enddo
 
-
-
-      ifprint = 1
-
+      allocate(ilevlist4(nboxes))
+      do i=1,nboxes
+        ilevlist4(i)=0
+      enddo
       cntlist4 = 0
 
       done = 1
@@ -168,11 +186,6 @@ c
       max_nodes = 10000
       allocate(xnodes(max_nodes))
       allocate(wts(max_nodes))
-
-      do i=1,8
-        timeinfo(i) = 0
-      enddo
-
 
 c
 c      temporary measure for code consistency
@@ -242,8 +255,8 @@ cc      call prin2('zk=*',zk,2)
         call h3dterms(boxsize(ilev),zk,eps,nterms(ilev))
         if(nterms(ilev).gt.nmax) nmax = nterms(ilev)
       enddo
-cc      call prinf('nterms=*',nterms,nlevels+1)
-cc      call prin2('rscales=*',rscales,nlevels+1)
+      call prinf('nterms=*',nterms,nlevels+1)
+      call prin2('rscales=*',rscales,nlevels+1)
 
       allocate(rsc(0:nmax))
 
@@ -303,12 +316,23 @@ C$OMP END PARALLEL DO
 
       
 
+      call cpu_time(time1)
+C$    time1=omp_get_wtime()
+      ncc = 8*ncbox
+      allocate(fimat(ncbox,ncc))
+      call get_children_fcoef_interp_mat(norder,ncbox,ncc,fimat)
+      call cpu_time(time2)
+C$    time2=omp_get_wtime()
+      print *, "coefs interp mat time: ", time2-time1
+
+ccccccc    init value for computing list3 interaction
+      call h3dsplitboxp_vol(norder,npbox,iboxsrcind,iboxfl,
+     1     iboxsubcenters,iboxsrc)
+
 c
 c
 c        step 1: convert coeffs to multipole expansions
 c
-      call cpu_time(time1)
-C$     time1 = omp_get_wtime()      
     
       if(ifprint.ge.1) 
      $   call prinf("=== STEP 1 (coefs -> mp) ====*",i,0)
@@ -319,7 +343,7 @@ cc      call prinf('iptr=*',iptr,8)
       allocate(ilevrel(0:nlevels))
       ilevrel(0) = 0
       ilevrel(1) = 0
-      do ilev = 2,nlevels
+      do ilev = 0,nlevels
         ilevrel(ilev) = 0
         do ibox = itree(2*ilev+1),itree(2*ilev+2)
           nchild = itree(iptr(4) + ibox-1)
@@ -329,11 +353,12 @@ cc      call prinf('iptr=*',iptr,8)
 
 cc      call prinf('ilevrel=*',ilevrel,nlevels+1)
      
-      do ilev=2,nlevels
+      allocate(mpcoefsmatall((nmax+1)*(2*nmax+1),ncbox,0:nlevels))
+      do ilev=1,nlevels
         nmp  = (nterms(ilev)+1)*(2*nterms(ilev)+1)
         if(ilevrel(ilev).eq.1) then
-          nq = 8
-          allocate(mpcoefsmat(nmp,ncbox))
+          nq = 10
+cc          allocate(mpcoefsmat(nmp,ncbox))
 
 cc          call prinf('ilev=*',ilev,1)
 cc          call prin2('zk=*',zk,2)
@@ -348,24 +373,20 @@ cc          print *, size(mpcoefsmat)
 
 
           call h3ddensmpmat(zk,rscales(ilev),nterms(ilev),
-     1     boxsize(ilev),type,norder,nq,wlege,nlege,mpcoefsmat,
-     2     nmp)
+     1     boxsize(ilev),type,norder,nq,wlege,nlege,
+     2     mpcoefsmatall(1,1,ilev),nmp)
           do ibox = itree(2*ilev+1),itree(2*ilev+2)
             nchild = itree(iptr(4)+ibox-1)
             if(nchild.eq.0) then
                ac = 1.0d0
                bc = 0.0d0
-              call zgemv('n',nmp,ncbox,ac,mpcoefsmat,nmp,
+              call zgemv('n',nmp,ncbox,ac,mpcoefsmatall(1,1,ilev),nmp,
      1         fcoefs(1,ibox),1,bc,rmlexp(iaddr(1,ibox)),1) 
             endif
           enddo
+cc          deallocate(mpcoefsmat)
         endif
       enddo
-
-      call cpu_time(time2)
-C$     time2 = omp_get_wtime()   
-
-      timeinfo(1) = time2-time1
 
 
 c       
@@ -444,6 +465,7 @@ C$    time2=omp_get_wtime()
       thresh = 1.0d-16
 
       pottmp = 0.0d0
+
       
       call h3dmpevalp(nd,zk,rscales(0),centers,rmlexp(iaddr(1,1)),
      1   nterms(0),xtargtmp,1,pottmp,wlege,nlege,thresh)
@@ -452,6 +474,24 @@ C$    time2=omp_get_wtime()
       call prin2('pottmpex=*',pottmpex,2)
       erra = abs(imag(pottmpex-pottmp))/abs(pottmpex)
       call prin2('error=*',erra,1)
+
+      pottmp2 = 0
+      do ilev = 0,nlevels
+        do ibox=itree(2*ilev+1),itree(2*ilev+2)
+          nchild = itree(iptr(4)+ibox-1)
+          if(nchild.eq.0) then
+            call h3dmpevalp(nd,zk,rscales(ilev),centers(1,ibox),
+     1      rmlexp(iaddr(1,ibox)),nterms(ilev),xtargtmp,1,
+     2      pottmp2,wlege,nlege,thresh)
+          endif
+        enddo
+      enddo
+
+      call prin2('pottmp=*',pottmp2,2)
+      call prin2('pottmpex=*',pottmpex,2)
+      erra = abs(imag(pottmpex-pottmp2))/abs(pottmpex)
+      call prin2('error using leaf boxes=*',erra,1)
+
 
       if(ifprint.ge.1)
      $    call prinf('=== Step 4 (mp to loc) ===*',i,0)
@@ -579,6 +619,24 @@ cc           r1 = rscales(ilev)
              rsc(i) = rsc(i-1)*r1
            enddo
 
+ccccccc    generate ilev-1 list4 type boxes' ghost children boxes' plan
+ccccccc    plan wave expantion
+           cntlist4=0
+           do ibox=itree(2*(ilev-1)+1),itree(2*(ilev-1)+2)
+             if(nlist3(ibox).gt.0) then
+               cntlist4=cntlist4+1
+               ilevlist4(ibox)=cntlist4
+             endif
+           enddo
+           allocate(pgboxwexp(nd,nexptotp,cntlist4,6))
+           print *,"cnlist4:",cntlist4,"ilev",ilev
+           call h3dlist4pw_vol(ilev-1,nd,nexptotp,nexptot,nterms(ilev),
+     1          nn,nlams,nlevels,ilevlist4,itree,nfourier,nphysical,
+     2          ncbox,nmax,rdminus,rdplus,rlsc,xshift,yshift,zshift,
+     3          fexp,mexpf1,mexpf2,tmp,tmp2,rsc,pgboxwexp,cntlist4,
+     4          fcoefs,fimat,mpcoefsmatall)
+ccccccc    end of pgboxwexp construction
+
            call prinf('before starting mp to pw*',i,0)
 
 c
@@ -660,6 +718,8 @@ C$OMP$PRIVATE(nn1256,n1256,ns3478,s3478,ne1357,e1357,nw2468,w2468)
 C$OMP$PRIVATE(nn12,n12,nn56,n56,ns34,s34,ns78,s78,ne13,e13,ne57,e57)
 C$OMP$PRIVATE(nw24,w24,nw68,w68,ne1,e1,ne3,e3,ne5,e5,ne7,e7)
 C$OMP$PRIVATE(nw2,w2,nw4,w4,nw6,w6,nw8,w8)
+C$OMP$PRIVATE(jstart,jend,i)
+C$OMP$PRIVATE(iboxlexp,subcenters,subpts,iboxpot)
             do ibox = itree(2*ilev-1),itree(2*ilev)
            
                nchild = itree(iptr(4)+ibox-1)
@@ -686,7 +746,7 @@ C$OMP$PRIVATE(nw2,w2,nw4,w4,nw6,w6,nw8,w8)
      5            mexpf1,mexpf2,mexpp1,mexpp2,mexppall(1,1,1),
      6            mexppall(1,1,2),mexppall(1,1,3),mexppall(1,1,4),
      7            xshift,yshift,zshift,fexpback,rlsc,pgboxwexp,
-     8            cntlist4,list4,nlist4,list4,mnlist4)
+     8            cntlist4,ilevlist4,nlist4,list4,mnlist4)
                   
                   call hprocessnsexp(nd,zk2,ibox,ilev,nboxes,centers,
      1            itree(iptr(5)),rscales(ilev),boxsize(ilev),
@@ -699,8 +759,8 @@ C$OMP$PRIVATE(nw2,w2,nw4,w4,nw6,w6,nw8,w8)
      7            mexppall(1,1,2),mexppall(1,1,3),mexppall(1,1,4),
      8            mexppall(1,1,5),mexppall(1,1,6),mexppall(1,1,7),
      9            mexppall(1,1,8),rdplus,xshift,yshift,zshift,
-     9            fexpback,rlsc,pgboxwexp,cntlist4,list4,nlist4,list4,
-     9            mnlist4)
+     9            fexpback,rlsc,pgboxwexp,cntlist4,ilevlist4,nlist4,
+     9            list4,mnlist4)
 
 
                   call hprocessewexp(nd,zk2,ibox,ilev,nboxes,centers,
@@ -719,9 +779,67 @@ C$OMP$PRIVATE(nw2,w2,nw4,w4,nw6,w6,nw8,w8)
      9            mexppall(1,1,10),mexppall(1,1,11),mexppall(1,1,12),
      9            mexppall(1,1,13),mexppall(1,1,14),mexppall(1,1,15),
      9            mexppall(1,1,16),rdminus,xshift,yshift,zshift,
-     9            fexpback,rlsc,pgboxwexp,cntlist4,list4,nlist4,list4,
-     9            mnlist4)
+     9            fexpback,rlsc,pgboxwexp,cntlist4,ilevlist4,nlist4,
+     9            list4,mnlist4)
                endif
+
+c
+c handle mp eval for list3
+c
+               if(nlist3(ibox).gt.0) then
+                 call getlist3pwlistall(ibox,boxsize(ilev),nboxes,
+     1                nlist3(ibox),list3(1,ibox),isep,centers,
+     2                nuall,uall,ndall,dall,nnall,nall,
+     3                nsall,sall,neall,eall,nwall,wall)
+
+                 allocate(iboxlexp(nd*(nterms(ilev)+1)*
+     1                   (2*nterms(ilev)+1),8))
+                 iboxlexp=0
+                 call hprocesslist3udexplong(nd,zk2,ibox,nboxes,centers,
+     1                boxsize(ilev),nterms(ilev),iboxlexp,rlams,whts,
+     2                nlams,nfourier,nphysical,nthmax,nexptot,
+     3                nexptotp,mexp,nuall,uall,ndall,dall,
+     4                mexpf1,mexpf2,mexpp1,mexpp2,
+     5                mexppall(1,1,1),mexppall(1,1,2),
+     6                xshift,yshift,zshift,fexpback,rlsc)
+
+                 call hprocesslist3nsexplong(nd,zk2,ibox,nboxes,centers,
+     1                boxsize(ilev),nterms(ilev),iboxlexp,rlams,whts,
+     2                nlams,nfourier,nphysical,nthmax,nexptot,
+     3                nexptotp,mexp,nnall,nall,nsall,sall,
+     4                mexpf1,mexpf2,mexpp1,mexpp2,
+     5                mexppall(1,1,1),mexppall(1,1,2),rdplus,
+     6                xshift,yshift,zshift,fexpback,rlsc)
+
+                 call hprocesslist3ewexplong(nd,zk2,ibox,nboxes,centers,
+     1                boxsize(ilev),nterms(ilev),iboxlexp,rlams,whts,
+     2                nlams,nfourier,nphysical,nthmax,nexptot,
+     3                nexptotp,mexp,neall,eall,nwall,wall,
+     4                mexpf1,mexpf2,mexpp1,mexpp2,
+     5                mexppall(1,1,1),mexppall(1,1,2),rdminus,
+     6                xshift,yshift,zshift,fexpback,rlsc)
+
+ccccccc          evaluate iboxlexp
+                 call scale_points(iboxsubcenters,subcenters,
+     1                8,boxsize(ilev))
+                 call scale_points(iboxsrc,subpts,
+     1                npbox,boxsize(ilev))
+                 call dreorderf(2*nd,npbox,pot(1,ibox),
+     1                iboxpot,iboxsrcind)
+                 do i=1,8
+                   jstart=iboxfl(1,i)
+                   jend=iboxfl(2,i)
+                   npts=jend-jstart+1
+                   call h3dtaevalp(nd,zk,rscales(ilev),
+     1                  subcenters(1,i),iboxlexp(1,i),
+     2                  nterms(ilev),subpts(1,jstart),npts,
+     3                  iboxpot(1,jstart),wlege,nlege)
+                 enddo
+                 call dreorderi(2*nd,npbox,iboxpot,pot(1,ibox),
+     1                iboxsrcind)
+                 deallocate(iboxlexp)
+               endif
+c and of handel mp eval for list3
             enddo
 C$OMP END PARALLEL DO       
 
@@ -731,6 +849,7 @@ C$OMP END PARALLEL DO
             deallocate(mexpf1,mexpf2,mexpp1,mexpp2,mexppall,mexp)
             deallocate(fexp,fexpback)
 
+            deallocate(pgboxwexp)
          else
             nquad2 = nterms(ilev)*2.2
             nquad2 = max(6,nquad2)
@@ -803,12 +922,9 @@ c
 c
 c       step 7 evaluate local expansions
 c
-
-      call cpu_time(time1)
-C$      time1 = omp_get_wtime()      
       if(ifprint.ge.1)
      $    call prinf('=== Step 7 (loc eval) ===*',i,0)
-      do ilev=0,nlevels
+      do ilev=2,nlevels
         neval = 0
         do ibox = itree(2*ilev+1),itree(2*ilev+2)
           nchild = itree(iptr(4)+ibox-1)
@@ -842,13 +958,10 @@ cc          call prinf('nmp=*',nmp,1)
 cc          call prin2('vals=*',vals,2*neval*npbox)
           call scatter_vals(neval,ijboxlist,pot,npbox,nboxes,vals)
 
+          deallocate(tamat)
           deallocate(rhs,vals)
         endif
       enddo
-      call cpu_time(time2)
-C$      time2 = omp_get_wtime() 
-
-      timeinfo(7) = time2-time1
 
 
 
@@ -857,8 +970,6 @@ c
 c       step 8, handle list 1 procesing
 c 
 
-      call cpu_time(time1)
-C$      time1 = omp_get_wtime()      
       allocate(nlist1_detailed(nboxes),list1_detailed(139,nboxes))
 
       call get_list1(nboxes,nlevels,itree,ltree,iptr,
@@ -879,6 +990,8 @@ c
 c      load table symmetries
 c
       call loadsymsc(iref,idimp,iflip)
+      call loadsymsbtos(irefbtos,idimpbtos,iflipbtos)
+      call loadsymsstob(irefstob,idimpstob,iflipstob)
 
       ndeg = norder - 1
       do ilev=0,nlevels
@@ -907,9 +1020,8 @@ C$          tt1 = omp_get_wtime()
           call splitreftab3d(tab,ntarg0,tabcoll,tabbtos,tabstob,
      1        npbox,ncbox)
           call cpu_time(tt2)
-C$          tt2 = omp_get_wtime()          
+C$          tt2 = omp_get_wtime()
           ttabgen(ilev) = tt2-tt1
-          
           
           call prin2('done splitting table*',i,0)
 
@@ -950,6 +1062,73 @@ cc               call prin2('vals=*',vals,2*npbox*ntype)
 
                call scatter_vals(ntype,ijboxlist,pot,npbox,nboxes,vals)
 
+               deallocate(rhs,vals)
+               
+            endif
+          enddo
+c
+c           handle big to small
+c
+          do ibtype=1,56
+            ntype = 0
+            ii = ibtype + 27
+            call get_list1boxes_type(ii,iboxstart,iboxend,
+     1            nboxes,nlist1_detailed,
+     1            list1_detailed,ijboxlist,ntype)
+
+            if(ntype.gt.0) then
+               allocate(rhs(ncbox,ntype),vals(npbox,ntype))
+
+               call buildtabfromsyms3d(ndeg,type,irefbtos(ibtype),
+     1           idimpbtos(1,ibtype),iflipbtos(1,ibtype),tabbtos,tabtmp,
+     2           npbox,ncbox)
+cc               call prinf('ibtype=*',ibtype,1)
+cc               call prin2('tabtmp=*',tabtmp,npbox*ncbox*2)
+               
+               call gather_vals(ntype,ijboxlist,fcoefs,ncbox,nboxes,rhs)
+
+cc               call prin2('rhs=*',rhs,ncbox*ntype*2)
+              
+               call zgemm('n','n',npbox,ntype,ncbox,ac,tabtmp,npbox,
+     1             rhs,ncbox,bc,vals,npbox)
+               
+cc               call prin2('vals=*',vals,2*npbox*ntype) 
+
+               call scatter_vals(ntype,ijboxlist,pot,npbox,nboxes,vals)
+
+               deallocate(rhs,vals)
+               
+            endif
+          enddo
+c
+c           handle small to big
+c
+          do ibtype=1,56
+            ntype = 0
+            ii = ibtype + 27 + 56
+            call get_list1boxes_type(ii,iboxstart,iboxend,
+     1            nboxes,nlist1_detailed,
+     1            list1_detailed,ijboxlist,ntype)
+
+            if(ntype.gt.0) then
+               allocate(rhs(ncbox,ntype),vals(npbox,ntype))
+
+               call buildtabfromsyms3d(ndeg,type,irefstob(ibtype),
+     1           idimpstob(1,ibtype),iflipstob(1,ibtype),tabstob,tabtmp,
+     2           npbox,ncbox)
+cc               call prinf('ibtype=*',ibtype,1)
+cc               call prin2('tabtmp=*',tabtmp,npbox*ncbox*2)
+               
+               call gather_vals(ntype,ijboxlist,fcoefs,ncbox,nboxes,rhs)
+
+cc               call prin2('rhs=*',rhs,ncbox*ntype*2)
+              
+               call zgemm('n','n',npbox,ntype,ncbox,ac,tabtmp,npbox,
+     1             rhs,ncbox,bc,vals,npbox)
+               
+cc               call prin2('vals=*',vals,2*npbox*ntype) 
+
+               call scatter_vals(ntype,ijboxlist,pot,npbox,nboxes,vals)
 
                deallocate(rhs,vals)
                
@@ -957,28 +1136,21 @@ cc               call prin2('vals=*',vals,2*npbox*ntype)
           enddo
         endif
       enddo
-      call cpu_time(time2)
-C$      time2 = omp_get_wtime()    
-
-      timeinfo(8) = time2-time1
-
-      call prin2('time = *',timeinfo,8)
-      d = 0
-      do i=1,8
-        d = d + timeinfo(i)
-      enddo
-      call prin2('total time=*',d,1)
-
-      do i=0,nlevels
-        d = d-ttabgen(i)
-      enddo
-      call prin2('total time without table generation=*',d,1)
 
 
 
 cc      call prin2('pot=*',pot,2*npbox*nboxes)
 
+      deallocate(fimat)
       call prin2('done with fmm*',i,0)
+
+      d = 0
+      do i=0,nlevels
+        d = d+ttabgen(i)
+      enddo
+
+      call prin2('table generation time=*',d,1)
+      call prin2('ttabgen=*',ttabgen,nlevels+1)
 
       return
       end
