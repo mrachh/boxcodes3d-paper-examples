@@ -356,7 +356,6 @@ cc      call prinf('ilevrel=*',ilevrel,nlevels+1)
         nmp  = (nterms(ilev)+1)*(2*nterms(ilev)+1)
         if(ilevrel(ilev).eq.1) then
           nq = 10
-
           call h3ddensmpmat(zk,rscales(ilev),nterms(ilev),
      1     boxsize(ilev),type,norder,nq,wlege,nlege,
      2     mpcoefsmatall(1,1,ilev),nmp)
@@ -377,7 +376,6 @@ cc          deallocate(mpcoefsmat)
 C$       time2 = omp_get_wtime()
  
       timeinfo(1) = time2-time1
-
 
 
 c       
@@ -507,6 +505,24 @@ C$    time2=omp_get_wtime()
       timeinfo(2)=time2-time1
 
       call prin2('mpmp time=*',timeinfo(2),1)
+
+      pottmp2 = 0
+      do ilev = 0,nlevels
+        do ibox=itree(2*ilev+1),itree(2*ilev+2)
+          nchild = itree(iptr(4)+ibox-1)
+          if(nchild.eq.0) then
+            call h3dmpevalp(nd,zk,rscales(ilev),centers(1,ibox),
+     1      rmlexp(iaddr(1,ibox)),nterms(ilev),xtargtmp,1,
+     2      pottmp2,wlege,nlege,thresh)
+          endif
+        enddo
+      enddo
+
+      call prin2('pottmp=*',pottmp2,2)
+      call prin2('pottmpex=*',pottmpex,2)
+      erra = abs(imag(pottmpex-pottmp2))/abs(pottmpex)
+      call prin2('error using leaf boxes=*',erra,1)
+
 
       if(ifprint.ge.1)
      $    call prinf('=== Step 3 (mp to loc) + formta+mpeval ===*',i,0)
@@ -978,7 +994,6 @@ C$       time1 = omp_get_wtime()
 C$      time2 = omp_get_wtime()     
       
       timeinfo(5) = time2-time1
-
 
 
 c
