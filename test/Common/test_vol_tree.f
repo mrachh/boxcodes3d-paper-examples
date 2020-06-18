@@ -22,19 +22,22 @@ c
       enddo
  1100 format(2x,e11.5,3(2x,i1),2(2x,i6),2x,i9,6(2x,e11.5))              
 
-      dpars(4) = 0.05d0/4 
+      dpars(4) = 0.05d0/4
+      dpars(4) = 0.75d0
       call prin2('dpars=*',dpars,4)
 
       norder = 8 
       iptype = 0 
       npbox = norder*norder*norder
-      iprec = 3
+      iprec = 1
               
       print *, ""
       print *, ""
       print *, "========================="
 
       print *, norder,iptype,iprec
+
+      eta = 0.0d0
 
       eps = 10.0d0**(-iprec*3)
       call cpu_time(t1)

@@ -13,20 +13,20 @@
 c
 c      initialize function parameters
 c
-      boxlen = 3.1d0
+      boxlen = 1.0d0
+      zk = 1.0d0
 
       nd = 1
       do i=1,3
         dpars(i) = (hkrand(0)-0.5d0)*boxlen*0.01
       enddo
-<<<<<<< HEAD
  1100 format(2x,e11.5,4(2x,i1),2(2x,i6),2x,i9,6(2x,e11.5))              
 
-      do isig = 1,4
-        dpars(4) = 0.75d0/2.0d0**isig
+      do isig = 1,3
+        dpars(4) = 0.25d0/2.0d0**isig
         call prin2('dpars=*',dpars,4)
 
-        do iorder = 1,4
+        do iorder = 2,4
           norder = 4*iorder
         
           do iptype0 = 1,3
@@ -50,6 +50,7 @@ C$              t1 = omp_get_wtime()
                 print *, "iptype=",iptype
                 call vol_tree_mem(eps,zk,boxlen,norder,iptype,eta,
      1          fgauss1,nd,dpars,zpars,ipars,nlevels,nboxes,ltree,rintl)
+
 
                 call cpu_time(t2)
 C$              t2 = omp_get_wtime()     
@@ -93,76 +94,6 @@ C$              t2 = omp_get_wtime()
                 deallocate(boxsize,itree)
               enddo
             enddo
-=======
- 1100 format(2x,e11.5,3(2x,i1),2(2x,i6),2x,i9,6(2x,e11.5))              
-
-      do isig = 1,3
-        dpars(4) = 0.75d0/2.0d0**isig
-        call prin2('dpars=*',dpars,4)
-
-        norder = 8 
-
-        do iptype0 = 1,3
-          iptype = iptype0-1
-
-          npbox = norder*norder*norder
-          do iprec=1,3
-              
-            print *, ""
-            print *, ""
-            print *, "========================="
-
-            print *, isig,norder,iptype,iprec
-
-            eps = 10.0d0**(-iprec*3)
-            call cpu_time(t1)
-C$          t1 = omp_get_wtime()      
-
-            print *, "iptype=",iptype
-            call vol_tree_mem(eps,zk,boxlen,norder,iptype,eta,
-     1      fgauss1,nd,dpars,zpars,ipars,nlevels,nboxes,ltree,rintl)
-
-            call cpu_time(t2)
-C$          t2 = omp_get_wtime()     
-      
-            tmem = t2-t1
-            call prin2('time taken in memory routine=*',t2-t1,1)
-
-
-            call prinf('nboxes=*',nboxes,1)
-            call prinf('nlevels=*',nlevels,1)
-            call prin2('rintl=*',rintl,nlevels+1)
-
-            allocate(fvals(nd,npbox,nboxes),centers(3,nboxes))
-            allocate(boxsize(0:nlevels),itree(ltree))
-
-            call cpu_time(t1)
-C$          t1 = omp_get_wtime()
-      
-            call vol_tree_build(eps,zk,boxlen,norder,iptype,eta,
-     1         fgauss1,nd,dpars,zpars,ipars,nlevels,nboxes,ltree0,
-     2         rintl,itree,iptr,fvals,centers,boxsize)
-            call cpu_time(t2)
-C$          t2 = omp_get_wtime()      
-              
-            tgen  =t2-t1
-            ttot = tgen+tmem
-            call prin2('time taken to build tree=*',t2-t1,1)
-            call prin2('speed in points per sec=*',
-     1        (nboxes*norder**3+0.0d0)/(t2-t1+tmem),1)
-            n = nboxes*npbox
-            smem = (n+0.0d0)/tmem
-            sgen = (n+0.0d0)/tgen
-            stot = (n+0.0d0)/ttot
-            open(unit=33,file='treegen-res-coefs-8.txt',
-     1         access='append')
-            write(33,1100) dpars(4),norder,iptype,iprec,nboxes,npbox,
-     1         n,tmem,tgen,ttot,smem,sgen,stot
-
-            close(33)
-            deallocate(fvals,centers)
-            deallocate(boxsize,itree)
->>>>>>> fd6a975051bca268a6457e9a3282e8fd773d7938
           enddo
         enddo
       enddo
