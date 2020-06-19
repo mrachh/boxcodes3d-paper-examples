@@ -22,7 +22,7 @@ c
       enddo
  1100 format(2x,e11.5,4(2x,i1),2(2x,i6),2x,i9,6(2x,e11.5))              
 
-      do isig = 1,3
+      do isig = 4,4
         dpars(4) = 0.25d0/2.0d0**isig
         call prin2('dpars=*',dpars,4)
 
@@ -84,7 +84,7 @@ C$              t2 = omp_get_wtime()
                 smem = (n+0.0d0)/tmem
                 sgen = (n+0.0d0)/tgen
                 stot = (n+0.0d0)/ttot
-                open(unit=33,file='treegen-res-coefs-8.txt',
+                open(unit=33,file='treegen-res-lowsig.txt',
      1             access='append')
                 write(33,1100) dpars(4),norder,iptype,ieta,iprec,
      1              nboxes,npbox,n,tmem,tgen,ttot,smem,sgen,stot
