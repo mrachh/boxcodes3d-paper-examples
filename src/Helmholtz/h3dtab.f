@@ -714,11 +714,12 @@ c
         enddo
       enddo
 
-
-      call h3d_get_eps_nqorder(tol,norder,eps,nqorder)
+      nquadmax = 8000
+      nqorder = 20
+      eps = tol
+      call h3d_get_eps_nqorder_nqmax(tol,norder,eps,nqorder,nquadmax)
       
       intype = 2
-      nquadmax = 7000
 
 
       call prinf("Starting adap quad for near*",i,0)
@@ -799,10 +800,11 @@ c
 c
 c
 c
-      subroutine h3d_get_eps_nqorder(tol,norder,eps,nqorder)
+      subroutine h3d_get_eps_nqorder_nqmax(tol,norder,eps,nqorder,
+     1   nqmax)
       implicit none
       real *8 tol,eps
-      integer norder,nqorder
+      integer norder,nqorder,nqmax
 c
 c
 c        fix this routine to optimize performance
@@ -810,6 +812,7 @@ c
       eps = min(tol*1.0d2,1.0d-2)
       nqorder = 16
       nqorder = 20
+      nqmax = 14000
 
       return
       end
