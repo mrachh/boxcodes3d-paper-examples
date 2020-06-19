@@ -219,9 +219,9 @@ c     brute force one entry
 c     
 
       do ipol=1,2
-        ix = iind2p(1,ipol)
-        iy = iind2p(2,ipol)
-        iz = iind2p(3,ipol)
+        ix = iind2p(1,ipol)+1
+        iy = iind2p(2,ipol)+1
+        iz = iind2p(3,ipol)+1
 
         print *, ipol,ix,iy,iz
 
