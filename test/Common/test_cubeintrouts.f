@@ -22,7 +22,7 @@
       read *, n
 
 
-      norder = 4
+      norder = 3
       
       ntarg = 2
 
@@ -33,7 +33,7 @@
       xyztarg(2,1) = 0.1d0
       xyztarg(3,1) = 1.019d0
 
-      xyztarg(1,2) = 1.2d0
+      xyztarg(1,2) = 0.2d0
       xyztarg(2,2) = 0.1d0
       xyztarg(3,2) = -2.0d0/7.0d0
 
@@ -52,6 +52,9 @@
         enddo
       enddo
 
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime      
+
       do i=1,ntarg
         x = xyztarg(1,i)
         y = xyztarg(2,i)
@@ -65,15 +68,24 @@
            call mksurhelm3dp(x,y,z,ix,iy,iz,zk,norder,pot_ex(j,i),ifail)
         enddo
       enddo
+      call cpu_time(t2)
+C$       t2 = omp_get_wtime()     
+      call prin2('old adap quad time=*',t2-t1,1)
 
+ 1111 continue
 
-      eps = 1.0d-6
+      eps = 1.0d-10
       nqorder = 11
       ncubemax = 5000
 
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime()      
       call ccubeints_adap(eps,norder,type,npols,ntarg,xyztarg,
      1       ncubemax,fker,dpars,zk,ipars,nqorder,pot)
+      call cpu_time(t2)
+C$      t2 = omp_get_wtime()   
 
+      call prin2('time in ccubeints_adap=*',t2-t1,1)
 
       do i=1,ntarg
         print *, "itarg =", i
