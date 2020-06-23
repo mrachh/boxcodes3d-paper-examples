@@ -66,9 +66,9 @@ SOURCES =  test_opt_h3dtabref.f \
   $(SRC)/Common/quadintrouts.f \
   $(SRC)/Common/voltab3d.f \
   $(SRC)/Helmholtz/lommel.f \
-  $(SRC)/Common/aquad.f \
   $(SRC)/Helmholtz/h3dtab.f \
-  $(SRC)/Helmholtz/h3dtab_brute.f
+  $(SRC)/Helmholtz/h3dtab_brute2.f \
+  $(SRC)/Common/cubeintrouts.f
 
 
 ifeq ($(WITH_SECOND),1)
