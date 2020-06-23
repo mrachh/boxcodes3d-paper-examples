@@ -27,7 +27,7 @@ c     exp(ikr)/r at the i-th reference target point (see tensrefpts3d)
 
 c       local      
       complex *16, allocatable :: tab_t(:,:),tab_tmp(:,:)
-      real *8 xyzc(3),bs
+      real *8 xyzc(3),bs,xq(100),w(100)
       real *8, allocatable :: xyztarg(:,:)
       real *8, allocatable :: xyztmp(:,:)
       integer, allocatable :: iindtmp(:)
@@ -49,6 +49,11 @@ c       local
       itype = 0
       call legeexps(itype,n,xq,u,v,w)
 
+      do i=1,norder
+        xq(i) = xq(i) + 1
+      enddo
+
+
       npt = n**3
       ntarg = 10*npt
       allocate(xyztarg(3,ntarg))
@@ -58,6 +63,8 @@ c       local
       istart2 = 7*npt+1
       call tensrefpts3d(xq,norder,bs,xyzc,xyztarg,xyztarg(1,istart1),
      1  xyztarg(1,istart2))
+
+      call prin2('xyztarg=*',xyztarg,3*npt)
       
       allocate(tab_t(npols,ntarg),tab_tmp(npols,ntarg))
 
@@ -76,7 +83,7 @@ c       local
 
       nttpcore = ceiling((ntmp+0.0d0)/nbatches)
 
-      eps = 1.0d-9
+      eps = 1.0d-11
       ncmax = 30000
       nqorder = 11
 
