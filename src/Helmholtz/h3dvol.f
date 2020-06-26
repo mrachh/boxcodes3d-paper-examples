@@ -232,7 +232,7 @@ c----------------------------------------------------------------------
      4           xshift,yshift,zshift,
      5           fexp,
      6           mexpf1,mexpf2,tmp,tmp2,rsc,pgboxwexp,
-     7           cntlist4,fcoefs,fimat,mpcoefsmatall)
+     7           cntlist4,fcoefs,fimat,mpcoefsmat)
       implicit none
 cccccc input/output variables
       integer ilev
@@ -256,7 +256,7 @@ cccccc input/output variables
       double complex tmp(nd,0:nterms,-nterms:nterms)
       double complex tmp2(nd,0:nterms,-nterms:nterms)
       double complex pgboxwexp(nd,nexptotp,cntlist4,6)
-      double complex mpcoefsmatall((nmax+1)*(2*nmax+1),ncbox,0:nlevels)
+      double complex mpcoefsmat(*)
       double complex fcoefs(ncbox,*)
 cccccc scoped function variables
       integer ibox,jbox,i,idim,nlist3,nmp,ncc,fdim
@@ -291,7 +291,7 @@ C$OMP$PRIVATE(mexpf1,mexpf2,tmp,tmp2)
      1         fimat,ncbox,beta,gboxfcoefs(1,1),fdim)
           jbox=ilevlist4(ibox)
           do i=1,8
-            call zgemv('n',nmp,ncbox,ac,mpcoefsmatall(1,1,ilev+1),
+            call zgemv('n',nmp,ncbox,ac,mpcoefsmat,
      1           nmp,gboxfcoefs(1,i),1,bc,gboxmexp(1,i),1)
 ccc    convert to plane wave
             call mpscale(nd,nterms,gboxmexp(1,i),

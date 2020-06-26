@@ -10,7 +10,7 @@ ifeq ($(HOST),osx)
 FC = gfortran
 FFLAGS = -O3 -march=native -funroll-loops -c -w -fopenmp
 FLINK = gfortran -w -fopenmp -o $(EXEC)
-FEND = -framework accelerate
+FEND = -lopenblas ${LDFLAGS}
 endif
 
 ifeq ($(HOST),linux-gfortran)

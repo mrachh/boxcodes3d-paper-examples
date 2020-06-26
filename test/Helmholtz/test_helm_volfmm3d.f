@@ -5,6 +5,7 @@
       real *8, allocatable :: fvals(:,:,:),centers(:,:),boxsize(:)
       real *8, allocatable :: umat(:,:),vmat(:,:),xref(:,:),wts(:)
       real *8 xyztmp(3),rintl(0:200)
+      real *8 timeinfo(6),tprecomp(3)
       complex *16 zk,zpars
 
       complex *16, allocatable :: pot(:,:),potex(:,:)
@@ -38,7 +39,7 @@ c
       enddo
 
       rsig = 1.0d0/13.0d0
-      rsig = 0.005d0
+cc      rsig = 0.005d0
 
       dpars(7) = rsig 
       dpars(8) = rsig
@@ -48,14 +49,14 @@ c
       zk = 2.0d0
       norder = 8
       iptype = 0
-      eta = 0
+      eta = 2
 
 
       zkeff = zk*boxlen
 
       npbox = norder*norder*norder
 
-      eps = 1.0d-9
+      eps = 1.0d-5
       call cpu_time(t1)
 C$      t1 = omp_get_wtime()
 
@@ -86,7 +87,7 @@ C$      t2 = omp_get_wtime()
       call prin2('speed in points per sec=*',
      1   (nboxes*norder**3+0.0d0)/(t2-t1),1)
 
-      eps = 1.0d-9
+      eps = 1.0d-5
 
 
 c
@@ -144,7 +145,7 @@ c
 C$     t1 = omp_get_wtime()      
       call helmholtz_volume_fmm(eps,zk,nboxes,nlevels,ltree,itree,
      1   iptr,norder,npols,type,fcoefs,centers,boxsize,npbox,
-     2   pot)
+     2   pot,timeinfo,tprecomp)
       call cpu_time(t2) 
 C$     t2 = omp_get_wtime()      
       call prin2('time taken in fmm=*',t2-t1,1)
@@ -157,8 +158,6 @@ C$     t2 = omp_get_wtime()
       enddo
       call prinf('nlfbox=*',nlfbox,1)
       call prin2('speed in pps=*',(npbox*nlfbox+0.0d0)/(t2-t1),1)
-      stop
- 1000 continue
 
     
 
