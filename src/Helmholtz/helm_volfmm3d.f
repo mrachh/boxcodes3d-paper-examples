@@ -134,7 +134,7 @@ C$      t1 = omp_get_wtime()
 
       allocate(mpcoefsmat(lmpcoefsmat))
       do ilev=0,nlevels
-        if(ilevrel(i).eq.1) then
+        if(ilevrel(ilev).eq.1) then
           nq = 20
           nmp = (nterms(ilev)+1)*(2*nterms(ilev)+1)
           call h3ddensmpmat(zk,rscales(ilev),nterms(ilev),
@@ -244,7 +244,6 @@ C$      t1 = omp_get_wtime()
       call prinf('itab=*',itab,nlevels+2)
       call prinf('impcoefsmat=*',impcoefsmat,nlevels+2)
       call prinf('itamat=*',itamat,nlevels+2)
-      stop
 
       allocate(tab(ltab))
 
@@ -264,7 +263,7 @@ C$      t2 = omp_get_wtime()
       call helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
      1   ltree,itree,iptr,norder,ncbox,ttype,fcoefs,centers,boxsize,
      2   mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
-     3   ltamat,taball,itab,ltab,npbox,pot,timeinfo)
+     3   ltamat,tab,itab,ltab,npbox,pot,timeinfo)
       
 
       return
@@ -278,7 +277,7 @@ c
       subroutine helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
      1   ltree,itree,iptr,norder,ncbox,ttype,fcoefs,centers,boxsize,
      2   mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
-     3   ltamat,taball,itab,ltab,npbox,pot,timeinfo)
+     3   ltamat,tab,itab,ltab,npbox,pot,timeinfo)
 
 c
 c       This code applies the Helmholtz volume layer potential
