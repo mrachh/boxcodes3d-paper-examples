@@ -14,7 +14,7 @@
       complex *16 ima,zz,ztmp
 
       real *8 alpha,beta
-      real *8 errs(200)
+      real *8 errs(1000)
 
       character *1, ttype
       data ima/(0.0d0,1.0d0)/
@@ -40,7 +40,7 @@ c
         dpars(3+i) = dpars(i) -0.07d0*hkrand(0)
       enddo
 
-      rsig = 1.0d0/26.0d0
+      rsig = 1.0d0/13.0d0
 cc      rsig = 0.005d0
 
       dpars(7) = rsig 
@@ -89,6 +89,9 @@ C$      t1 = omp_get_wtime()
       call cpu_time(t2)
 C$      t2 = omp_get_wtime()      
 
+      print *, "done building tree"
+      allocate(qval(npbox,nboxes),uval(npbox,nboxes),
+     1    rhsval(npbox,nboxes))
       do i=1,nboxes
         do j=1,npbox
           qval(j,i) = fvals(1,j,i)
@@ -102,7 +105,6 @@ C$      t2 = omp_get_wtime()
       call prin2('speed in points per sec=*',
      1   (nboxes*norder**3+0.0d0)/(t2-t1),1)
 
-      stop
 
 
 
@@ -117,13 +119,13 @@ c
       allocate(soln(npbox,nboxes),pot(npbox,nboxes))
       numit = 200
       niter = 0
-      irep = 1
+      irep = 2
       eps_gmres = 1.0d-7
 
       ttype = 'T'
       call ls_solver_guru(eps,zk,nboxes,nlevels,ltree,itree,iptr,
      1   norder,npols,ttype,qval,centers,boxsize,npbox,
-     2   rhsval,irep,eps_gmres,niter,errs,rres,soln)
+     2   rhsval,irep,eps_gmres,numit,niter,errs,rres,soln)
 
       call prinf('niter=*',niter,1)
       call prin2('errs=*',errs,niter)
@@ -157,6 +159,9 @@ C$     t2 = omp_get_wtime()
           enddo
         endif
       enddo
+
+      print *, "erra=*",erra
+      print *, "ra=",ra
       erra = sqrt(erra/ra)
 
       call prin2('erra = *',erra,1)
@@ -191,7 +196,7 @@ c
         f(i) = exp(-rr(i)/sigma(i))
       enddo
 
-      f2lap = -6*f(2)/sigma(2) + 4*rr(2)*f(2)/sigma(2)**2 
+      f2lap = -6.0d0*f(2)/sigma(2) + 4.0d0*rr(2)*f(2)/sigma(2)**2 
       f(3) = real(zpars)**2*(1.0d0+f(1))*f(2) + f2lap  
       
       

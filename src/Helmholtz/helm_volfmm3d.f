@@ -348,7 +348,7 @@ c
       complex *16 zk,zk2
       real *8 boxsize(0:nlevels),eps
 
-      complex *16 mpcoefsmat(lmpcoefmat),tab(ltab)
+      complex *16 mpcoefsmat(lmpcoefsmat),tab(ltab)
       complex *16 tamat(ltamat)
 
       character *1 ttype

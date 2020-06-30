@@ -71,6 +71,7 @@ SOURCES =  test_ls_solver.f \
   $(SRC)/Common/loadsyms3d.f \
   $(SRC)/Common/squarearbq.f \
   $(SRC)/Common/zerrf.f \
+  $(SRC)/Common/rotmat_gmres.f \
   $(FMM3D)/Helmholtz/hpwrouts.f \
   $(FMM3D)/Helmholtz/h3dtrans.f \
   $(FMM3D)/Helmholtz/h3dterms.f \

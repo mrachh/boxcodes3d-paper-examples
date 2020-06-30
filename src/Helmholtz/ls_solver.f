@@ -1,4 +1,4 @@
-c
+
 c
 c    this file contains subroutines for a lippman schwinger
 c     solver for the Helmholtz equation 
@@ -7,7 +7,7 @@ c
 
       subroutine ls_solver_guru(eps,zk,nboxes,nlevels,ltree,itree,iptr,
      1   norder,ncbox,ttype,qvals,centers,boxsize,npbox,
-     2   rhs,irep,eps_gmres,niter,errs,rres,sigma)
+     2   rhs,irep,eps_gmres,numit,niter,errs,rres,sigma)
 c
 c      this subroutine is a solver for the lippman schwinger solver 
 c
@@ -85,6 +85,7 @@ c
       real *8 tprecomp(3)
       integer irep
       complex *16 sigma(npbox,nboxes)
+      complex *16 temp,ztmp
 c
 c       fmm precomp variables
 c
@@ -111,6 +112,7 @@ c
       allocate(vmat(npbox,nboxes,numit+1),hmat(numit,numit))
       allocate(cs(numit),sn(numit))
       allocate(wtmp(npbox,nboxes),svec(numit+1),yvec(numit+1))
+      allocate(wtmp2(npbox,nboxes))
 
 c
 c       get precomputation arrays for current tree structure
@@ -125,6 +127,8 @@ c
       call helmholtz_volume_fmm_init(eps,zk,nboxes,nlevels,boxsize,
      1  norder,npbox,ncbox,impcoefsmat,lmpcoefsmat,itamat,ltamat,
      2  itab,ltab,ttype,mpcoefsmat,tamat,tab,tprecomp)
+
+      call prinf('finished precomp*',i,0)
 
       allocate(rhsuse(npbox,nboxes))
 
@@ -151,7 +155,8 @@ c       the identity scaling (z) is defined via zid below,
 c       and K represents the action of the principal value 
 c       part of the matvec
 c
-      zid = 4*pi
+      zid = -4*pi
+      print *, zid
 
 
       niter=0
@@ -186,6 +191,8 @@ c
       do it=1,numit
         it1 = it + 1
 
+        print *, "iter number=",it
+
 c
 c        NOTE:
 c        replace this routine by appropriate layer potential
@@ -195,7 +202,7 @@ c
         if(irep.eq.2) then
           do ibox=1,nboxes
             do j=1,npbox
-              wtmp2(j,ibox) = vmat(j,ibox,1)*zk**2*qvals(j,ibox)
+              wtmp2(j,ibox) = vmat(j,ibox,it)*zk**2*qvals(j,ibox)
             enddo
           enddo
         endif
@@ -203,7 +210,7 @@ c
         if(irep.eq.1) then
           do ibox=1,nboxes
             do j=1,npbox
-              wtmp2(j,ibox) = vmat(j,ibox,1)
+              wtmp2(j,ibox) = vmat(j,ibox,it)
             enddo
           enddo
         endif
@@ -214,10 +221,12 @@ c
           enddo
         enddo
 
+
         call helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
      1  ltree,itree,iptr,norder,ncbox,ttype,wtmp2,centers,
      2  boxsize,mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
      3  ltamat,tab,itab,ltab,npbox,wtmp,timeinfo)
+
 
         if(irep.eq.1) then
           do ibox=1,nboxes
