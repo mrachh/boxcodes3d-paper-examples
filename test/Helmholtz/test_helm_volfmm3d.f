@@ -9,12 +9,11 @@
       complex *16 zk,zpars
 
       complex *16, allocatable :: pot(:,:),potex(:,:)
-      complex *16 ima,zz
+      complex *16 ima,zz,ztmp
 
       real *8 alpha,beta
 
       character *1, type
-      real *8, allocatable :: fcoefs(:,:,:)
       data ima/(0.0d0,1.0d0)/
 
       external fgaussn,fgauss1
@@ -47,7 +46,7 @@ cc      rsig = 0.005d0
      
 
       zk = 2.0d0
-      norder = 8
+      norder = 4
       iptype = 0
       eta = 2
 
@@ -72,7 +71,7 @@ C$      t1 = omp_get_wtime()
       allocate(boxsize(0:nlevels),itree(ltree))
 
       call vol_tree_build(eps,zk,boxlen,norder,iptype,eta,fgaussn,nd,
-     1  dpars,zpars,ipars,nlevels,nboxes,ltree0,rintl,itree,iptr,fvals,
+     1  dpars,zpars,ipars,nlevels,nboxes,ltree,rintl,itree,iptr,fvals,
      2  centers,boxsize)
       
       call cpu_time(t2)
@@ -97,41 +96,6 @@ c
       
       npols = norder*(norder+1)*(norder+2)/6
 
-      allocate(xref(3,npbox),umat(npols,npbox),vmat(npbox,npols))
-      allocate(wts(npbox))
-
-      allocate(fcoefs(nd,npols,nboxes))
-
-      type = 'T'
-      itype = 2
-      call legetens_exps_3d(itype,norder,type,xref,umat,npols,vmat,
-     1   npbox,wts)
-      call prinf('norder=*',norder,1)
-      call prinf('npbox=*',npbox,1)
-
-
-
-cc      print *,npols,npbox,nd
-
-      alpha = 1.0d0
-      beta = 0
-      do ibox=1,nboxes
-        call dgemm('n','t',nd,npols,npbox,alpha,fvals(1,1,ibox),
-     1     nd,umat,npols,beta,fcoefs(1,1,ibox),nd)
-
-c
-c       test fcoefs values at a few random points in the box
-c  
-        xyztmp(1) = centers(1,ibox) + (hkrand(0)-0.5d0)*0.125d0
-        xyztmp(2) = centers(1,ibox) + (hkrand(0)-0.5d0)*0.125d0
-        xyztmp(3) = centers(1,ibox) + (hkrand(0)-0.5d0)*0.125d0
-
-        x = (xyztmp(1) - centers(1,ibox))*1.0d0 
-      enddo
-
-
-      
-
 
       allocate(pot(npbox,nboxes))
 
@@ -140,11 +104,13 @@ c
           pot(j,i) = 0
         enddo
       enddo
+
+      type = 'T'
       
       call cpu_time(t1) 
 C$     t1 = omp_get_wtime()      
       call helmholtz_volume_fmm(eps,zk,nboxes,nlevels,ltree,itree,
-     1   iptr,norder,npols,type,fcoefs,centers,boxsize,npbox,
+     1   iptr,norder,npols,type,fvals,centers,boxsize,npbox,
      2   pot,timeinfo,tprecomp)
       call cpu_time(t2) 
 C$     t2 = omp_get_wtime()      
@@ -179,6 +145,12 @@ c
       c = exp(-ss**2*zk**2/2.0d0)*ss**3*(2.0d0*pi)**1.5d0
       print *, "ss=",ss
 
+
+      itype = 0
+      allocate(xref(3,npbox),umat(npols,npbox),vmat(npbox,npols),
+     1    wts(npbox))
+      call legetens_exps_3d(itype,norder,'t',xref,umat,1,vmat,1,wts)
+
       do ilevel=1,nlevels
         do ibox=itree(2*ilevel+1),itree(2*ilevel+2)
           if(itree(iptr(4)+ibox-1).eq.0) then
@@ -193,15 +165,11 @@ c
 
               r = sqrt(dx**2 + dy**2 + dz**2)
 
-              zz = ima*(ss*ima*zk/sqrt(2.0d0)-r/sqrt(2.0d0)/ss)
-              uu = 0
-              vv = 0
-              xx = real(zz)
-              yy = imag(zz)
-              call wofz(xx,yy,uu,vv,flag)
+              zz = (ss*ima*zk - r/ss)/sqrt(2.0d0)
+              nn = 6*abs(real(zz)*imag(zz))+20
+              call zerrf(zz,ztmp,nn)
 
-
-              zz = (1.0d0-(uu + ima*vv)*exp(zz**2))*exp(-ima*zk*r)
+              zz = exp(-ima*zk*r)*ztmp
               potex(j,ibox) = c/r*(-real(zz)+ima*sin(zk*r))
 
               rr1 = imag(potex(j,ibox))
@@ -209,7 +177,6 @@ c
 
 
               erra = erra + abs(pot(j,ibox)-potex(j,ibox))**2
-cc          erra = erra + abs(rr1-rr2)**2
               ra = ra + abs(potex(j,ibox))**2
             enddo
           endif

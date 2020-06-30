@@ -1,5 +1,5 @@
       subroutine helmholtz_volume_fmm(eps,zk,nboxes,nlevels,ltree,
-     1   itree,iptr,norder,ncbox,ttype,fcoefs,centers,boxsize,npbox,
+     1   itree,iptr,norder,ncbox,ttype,fvals,centers,boxsize,npbox,
      2   pot,timeinfo,tprecomp)
 
 c
@@ -36,8 +36,8 @@ c           number of coefficients of expansions of functions
 c           in each of the boxes
 c         ttype - character *1
 c            type of coefs provided, total order ('t') or full order('f')
-c         fcoefs - double complex (ncbox,nboxes)
-c           tensor product legendre expansions of the right hand side
+c         fvals - double complex (npbox,nboxes)
+c           function tabulated on a grid
 c         centers - double precision (3,nboxes)
 c           xyz coordintes of boxes in the tree structure
 c         boxsize - double precision (0:nlevels)
@@ -56,7 +56,7 @@ c
       integer nboxes,nlevels,ltree
       integer itree(ltree),iptr(8),norder,ncbox,npbox
       character *1 ttype
-      complex *16 fcoefs(ncbox,nboxes)
+      complex *16 fvals(npbox,nboxes)
       complex *16 pot(npbox,nboxes)
       real *8 centers(3,nboxes)
       real *8 boxsize(0:nlevels)
@@ -67,22 +67,106 @@ c
       integer lmpcoefsmat,ltamat,ltab
       complex *16, allocatable :: mpcoefsmat(:),tamat(:),tab(:)
 
-      integer ilev,ibox,i,nmax,nmp
-      integer ilevrel(0:nlevels)
 
+      call helmholtz_volume_fmm_mem(eps,zk,nboxes,nlevels,ltree,
+     1   itree,iptr,boxsize,centers,npbox,ncbox,impcoefsmat,lmpcoefsmat,
+     2   itamat,ltamat,itab,ltab)
+      call prinf('impcoefsmat=*',impcoefsmat,nlevels+2)
+      call prinf('itamat=*',itamat,nlevels+2)
+      call prinf('itab=*',itab,nlevels+2)
+      print *, lmpcoefsmat,ltamat,ltab
+
+      
+      allocate(mpcoefsmat(lmpcoefsmat),tamat(ltamat),tab(ltab))
+
+      call helmholtz_volume_fmm_init(eps,zk,nboxes,nlevels,
+     1   boxsize,norder,npbox,ncbox,impcoefsmat,lmpcoefsmat,
+     2   itamat,ltamat,itab,ltab,ttype,mpcoefsmat,tamat,tab,tprecomp)
+
+      call helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
+     1   ltree,itree,iptr,norder,ncbox,ttype,fvals,centers,boxsize,
+     2   mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
+     3   ltamat,tab,itab,ltab,npbox,pot,timeinfo)
+      
+
+      return
+      end
+c
+c
+c
+c
+c
+      subroutine helmholtz_volume_fmm_mem(eps,zk,nboxes,nlevels,ltree,
+     1   itree,iptr,boxsize,centers,npbox,ncbox,impcoefsmat,
+     2   lmpcoefsmat,itamat,ltamat,itab,ltab)
+c    This subroutine estimates the memory requirements for the volume
+c    fmm precmoputation
+c
+c    input arguments:
+c         eps - real *8
+c           precision
+c         zk - complex *16
+c           wave number for the problem
+c         nboxes - integer
+c            number of boxes
+c         nlevels - integer
+c            number of levels
+c         ltree - integer
+c            length of array containing the tree structure
+c         itree - integer(ltree)
+c            array containing the tree structure
+c         iptr - integer(8)
+c            pointer to various parts of the tree structure
+c           iptr(1) - laddr
+c           iptr(2) - ilevel
+c           iptr(3) - iparent
+c           iptr(4) - nchild
+c           iptr(5) - ichild
+c           iptr(6) - ncoll
+c           iptr(7) - coll
+c           iptr(8) - ltree
+c      boxsize - real *8(0:nlevels)
+c         size of box at each level
+c
+c      npbox = integer
+c        number of points per box
+c 
+c      ncbox - integrer
+c        number of polynomials per box
+c
+c   output arguemnts:
+c      impcoefsmat - integer(0:nlevels+1)
+c        array estimating the size of mpcoefsmat at each level
+c      lmpcoefsmat - integer
+c        size of mpcoefsmat
+c      itamat - integer(0:nlevels+1)
+c        array estimating the size of tamat at each level
+c      ltamat - integer
+c        size of tamat
+c      itab - integer(0:nlevels+1)
+c        array estimating the size of local quadratue table
+c         at each level
+c      ltab - integer
+c        length of local correction tables
+c   
+
+      implicit real *8 (a-h,o-z)
+      integer nboxes,nlevels,ltree
+      integer itree(ltree),iptr(8),impcoefsmat(0:nlevels+1)
+      integer itamat(0:nlevels+1),itab(0:nlevels+1)
+      integer lmpcoefsmat,ltamat,ltab
+      integer npbox,ncbox
+      complex *16 zk
+      real *8 boxsize(0:nlevels),eps,centers(3,nboxes)
+
+      integer nterms(0:nlevels),ilevrel(0:nlevels)
       real *8 rscales(0:nlevels)
-      integer nterms(0:nlevels)
-      real *8, allocatable :: wlege(:)
+
       integer, allocatable :: nlist1(:),list1(:,:)
       integer, allocatable :: nlist2(:),list2(:,:)
       integer, allocatable :: nlist3(:),list3(:,:)
       integer, allocatable :: nlist4(:),list4(:,:)
-
-      complex *16 ac,bc,zk2
-
-      integer ifwrite
-
-
+c
 c
 c
 c      get number of terms
@@ -96,25 +180,12 @@ c
         call h3dterms(boxsize(ilev),zk,eps,nterms(ilev))
         if(nterms(ilev).gt.nmax) nmax = nterms(ilev)
       enddo
-      call prinf('nterms=*',nterms,nlevels+1)
-      call prin2('rscales=*',rscales,nlevels+1)
 
-c
-c       initialize wlege
-c
-      nlege = nmax+10
-      lw7 = (nlege+1)**2*4
-      allocate(wlege(lw7))
-      call ylgndrfwini(nlege,wlege,lw7,lused7)
-
-      call prinf('Finished initializing wlege*',i,0)
 
 c
 c   generate mpcoefsmat
 c
 c
-      call cpu_time(t1)
-C$      t1 = omp_get_wtime()      
       lmpcoefsmat = 0
       impcoefsmat(0) = 1
       do ilev=0,nlevels
@@ -132,31 +203,13 @@ C$      t1 = omp_get_wtime()
         lmpcoefsmat = lmpcoefsmat + llev
       enddo
 
-      allocate(mpcoefsmat(lmpcoefsmat))
-      do ilev=0,nlevels
-        if(ilevrel(ilev).eq.1) then
-          nq = 20
-          nmp = (nterms(ilev)+1)*(2*nterms(ilev)+1)
-          call h3ddensmpmat(zk,rscales(ilev),nterms(ilev),
-     1      boxsize(ilev),ttype,norder,nq,wlege,nlege,
-     2      mpcoefsmat(impcoefsmat(ilev)),nmp)
-        endif
-      enddo
-      call cpu_time(t2)
-C$      t2 = omp_get_wtime()      
-      tprecomp(1) = t2-t1
-c
-c   end of getting mpcoefsmat
-c
-c
-      call prin2('finished h3ddensmpmat*',i,0)
+      print *, "lmpcoefsmat=",lmpcoefsmat
+
 
 c
 c
 c      generate tamat
 c
-      call cpu_time(t1)
-C$      t1 = omp_get_wtime()      
       itamat(0) = 1
       itamat(1) = 1
       itamat(2) = 1
@@ -170,25 +223,9 @@ C$      t1 = omp_get_wtime()
          itamat(ilev+1) = itamat(ilev) + llev
          ltamat = ltamat + llev
       enddo
-
-      allocate(tamat(ltamat))
-
-      do ilev=2,nlevels
-        if(ilevrel(ilev).eq.1) then
-          nmp = (nterms(ilev)+1)*(2*nterms(ilev)+1)
-          call h3dtaevalgridmatp_fast(zk,rscales(ilev),nterms(ilev),
-     1      boxsize(ilev),norder,wlege,nlege,tamat(itamat(ilev)),npbox)
-        endif
-      enddo
-
-      call cpu_time(t2)
-C$      t2 = omp_get_wtime()      
-      tprecomp(2) = t2-t1
 c
 c  end of getting tamat
 c
-c
-      call prin2('finished tamat*',i,0)
 c
 c   compute list info
 c
@@ -224,8 +261,6 @@ c   get near tables
 c
 c
 
-      call cpu_time(t1)
-C$      t1 = omp_get_wtime()      
       itab(0) = 1
       ltab = 0
       llev0 = 10*npbox*ncbox
@@ -241,16 +276,177 @@ C$      t1 = omp_get_wtime()
          itab(ilev+1) = itab(ilev) + llev
          ltab = ltab + llev
       enddo
-      call prinf('itab=*',itab,nlevels+2)
-      call prinf('impcoefsmat=*',impcoefsmat,nlevels+2)
-      call prinf('itamat=*',itamat,nlevels+2)
 
-      allocate(tab(ltab))
+      return
+      end
+c
+c
+c
+c
+c
+c
+c
+c
+c
+c
+      subroutine helmholtz_volume_fmm_init(eps,zk,nboxes,nlevels,
+     1   boxsize,norder,npbox,ncbox,impcoefsmat,lmpcoefsmat,
+     2   itamat,ltamat,itab,ltab,ttype,mpcoefsmat,tamat,tab,tprecomp)
+c    This subroutine estimates the memory requirements for the volume
+c    fmm precmoputation
+c
+c    input arguments:
+c         eps - real *8
+c           precision
+c         zk - complex *16
+c           wave number for the problem
+c         nboxes - integer
+c            number of boxes
+c         nlevels - integer
+c            number of levels
+c      boxsize - real *8(0:nlevels)
+c         size of box at each level
+c      norder - integer
+c        order of discretization
+c      npbox = integer
+c        number of points per box
+c      ncbox - integrer
+c        number of polynomials per box
+c      impcoefsmat - integer(0:nlevels+1)
+c        array estimating the size of mpcoefsmat at each level
+c      lmpcoefsmat - integer
+c        size of mpcoefsmat
+c      itamat - integer(0:nlevels+1)
+c        array estimating the size of tamat at each level
+c      ltamat - integer
+c        size of tamat
+c      itab - integer(0:nlevels+1)
+c        array estimating the size of local quadratue table
+c         at each level
+c      ltab - integer
+c        length of local correction tables
+c      ttype - character
+c        type of expansions
+c
+c   output arguments:
+c     mpcoefsmat - complex *16 (lmpcoefsmat)
+c        coefs -> mp mat at relevant levels
+c     tamat - complex *16 (ltamat)
+c        ta -> pot mat at relevant levels
+c     tab - complex *16(ltab)
+c        near quadrature correction at each level
+c     tprecomp - real *8 (3)
+c        time taken in various precomputation steps
+c   
+
+      implicit real *8 (a-h,o-z)
+      integer nboxes,nlevels,ltree
+      integer impcoefsmat(0:nlevels+1)
+      integer itamat(0:nlevels+1),itab(0:nlevels+1)
+      integer lmpcoefsmat,ltamat,ltab
+      integer npbox,ncbox
+      complex *16 zk,zk2
+      real *8 boxsize(0:nlevels),eps
+
+      complex *16 mpcoefsmat(lmpcoefmat),tab(ltab)
+      complex *16 tamat(ltamat)
+
+      character *1 ttype
+
+      integer nterms(0:nlevels),ilevrel(0:nlevels)
+      real *8 rscales(0:nlevels),tprecomp(3)
+
+      real *8, allocatable :: wlege(:)
+
+c
+c
+c
+c      get number of terms
+c
+
+      nmax = 0
+      do ilev = 0,nlevels
+        rscales(ilev) = boxsize(ilev)*abs(zk)
+
+        if(rscales(ilev).gt.1) rscales(ilev) = 1.0d0
+        call h3dterms(boxsize(ilev),zk,eps,nterms(ilev))
+        if(nterms(ilev).gt.nmax) nmax = nterms(ilev)
+      enddo
+
+c
+c       initialize wlege
+c
+      nlege = nmax+10
+      lw7 = (nlege+1)**2*4
+      allocate(wlege(lw7))
+      call ylgndrfwini(nlege,wlege,lw7,lused7)
+
+      call prinf('Finished initializing wlege*',i,0)
+
+
+c
+c
+c   generate mpcoefsmat
+c
+c
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime()      
+
+      do ilev=0,nlevels
+
+        nnn = impcoefsmat(ilev+1)-impcoefsmat(ilev)
+        print *, ilev,nnn
+        if(nnn.gt.0) then
+          nq = 20
+          nmp = (nterms(ilev)+1)*(2*nterms(ilev)+1)
+          call h3ddensmpmat(zk,rscales(ilev),nterms(ilev),
+     1      boxsize(ilev),ttype,norder,nq,wlege,nlege,
+     2      mpcoefsmat(impcoefsmat(ilev)),nmp)
+        endif
+      enddo
+      call cpu_time(t2)
+C$      t2 = omp_get_wtime()      
+      tprecomp(1) = t2-t1
+c
+c   end of getting mpcoefsmat
+c
+      print *, "finished generating mpcoefsmat"
+
+c
+c
+c      generate tamat
+c
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime()     
+
+      do ilev=2,nlevels
+        nnn = itamat(ilev+1)-itamat(ilev)
+        if(nnn.gt.1) then
+          nmp = (nterms(ilev)+1)*(2*nterms(ilev)+1)
+          call h3dtaevalgridmatp_fast(zk,rscales(ilev),nterms(ilev),
+     1      boxsize(ilev),norder,wlege,nlege,tamat(itamat(ilev)),npbox)
+        endif
+      enddo
+
+      call cpu_time(t2)
+C$      t2 = omp_get_wtime()      
+      tprecomp(2) = t2-t1
+c
+c  end of getting tamat
+c
+c   get near tables
+c
+c
+
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime()      
+
 
       ndeg = norder-1
       ntarg0 = 10*npbox
       do ilev=0,nlevels
-        if(ilevrel(ilev).eq.1) then
+        nnn = itab(ilev+1)-itab(ilev)
+        if(nnn.gt.0) then
           zk2 = zk*boxsize(ilev)/2.0d0 
           call h3dtabp_ref(ndeg,zk2,eps,tab(itab(ilev)),ntarg0)
         endif
@@ -260,12 +456,6 @@ C$      t2 = omp_get_wtime()
 
       tprecomp(3) = t2-t1
 
-      call helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
-     1   ltree,itree,iptr,norder,ncbox,ttype,fcoefs,centers,boxsize,
-     2   mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
-     3   ltamat,tab,itab,ltab,npbox,pot,timeinfo)
-      
-
       return
       end
 c
@@ -274,8 +464,10 @@ c
 c
 c
 
+
+
       subroutine helmholtz_volume_fmm_wprecomp(eps,zk,nboxes,nlevels,
-     1   ltree,itree,iptr,norder,ncbox,ttype,fcoefs,centers,boxsize,
+     1   ltree,itree,iptr,norder,ncbox,ttype,fvals,centers,boxsize,
      2   mpcoefsmat,impcoefsmat,lmpcoefsmat,tamat,itamat,
      3   ltamat,tab,itab,ltab,npbox,pot,timeinfo)
 
@@ -313,8 +505,8 @@ c           number of coefficients of expansions of functions
 c           in each of the boxes
 c         ttype - character *1
 c            type of coefs provided, total order ('t') or full order('f')
-c         fcoefs - double complex (ncbox,nboxes)
-c           tensor product legendre expansions of the right hand side
+c         fvals - double complex (npbox,nboxes)
+c            function values tabulated on the tree
 c         centers - double precision (3,nboxes)
 c           xyz coordintes of boxes in the tree structure
 c         boxsize - double precision (0:nlevels)
@@ -352,7 +544,7 @@ c
       complex *16 zk,zk2
       integer nboxes,nlevels,ltree
       integer itree(ltree),iptr(8),ncbox,npbox,ncc
-      complex *16 fcoefs(ncbox,nboxes)
+      complex *16 fvals(npbox,nboxes)
       complex *16 pot(npbox,nboxes)
       double precision boxsize(0:nlevels),centers(3,nboxes)
 
@@ -377,6 +569,8 @@ c
       character *1 ttype
       double precision, allocatable :: xnodes(:),wts(:)
 
+      real *8, allocatable :: xref(:,:),umat(:,:),vmat(:,:),wts0(:)
+      complex *16, allocatable :: fcoefs(:,:)
 c
 cc      pw stuff
 c
@@ -423,6 +617,8 @@ c
       complex *16, allocatable :: tabtmp(:,:)
       complex *16, allocatable :: rhs(:,:),vals(:,:)
       complex *16 ac,bc,ima
+
+      real *8 ra,rb
 
       integer nquad2,ifinit2
 
@@ -480,6 +676,27 @@ c
       max_nodes = 10000
       allocate(xnodes(max_nodes))
       allocate(wts(max_nodes))
+
+
+c
+c       compute coefs
+c
+c
+      allocate(fcoefs(ncbox,nboxes),xref(3,npbox),umat(ncbox,npbox),
+     1   vmat(npbox,ncbox),wts0(npbox))
+     
+      itype = 2 
+      call legetens_exps_3d(itype,norder,ttype,xref,umat,ncbox,vmat,
+     1  npbox,wts0)
+      
+      ra = 1.0d0
+      rb = 0.0d0
+      do ibox=1,nboxes
+        call dgemm('n','t',2,ncbox,npbox,ra,fvals(1,ibox),
+     1    2,umat,ncbox,rb,fcoefs(1,ibox),2)
+      enddo
+      
+
 
 c
 c      temporary measure for code consistency

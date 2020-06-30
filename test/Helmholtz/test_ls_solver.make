@@ -50,7 +50,7 @@ UTILS_DIR = ../../../utils
 
 .PHONY: all clean list
 
-SOURCES =  test_helm_volfmm3d.f \
+SOURCES =  test_ls_solver.f \
   $(SRC)/Common/prini_new.f \
   $(UTILS_DIR)/legeexps.f \
   $(SRC)/Common/tree_vol.f \
@@ -60,6 +60,7 @@ SOURCES =  test_helm_volfmm3d.f \
   $(SRC)/Helmholtz/h3dtab.f \
   $(SRC)/Helmholtz/lommel.f \
   $(SRC)/Helmholtz/helm_volfmm3d.f \
+  $(SRC)/Helmholtz/ls_solver.f \
   $(SRC)/Common/sphere_pol_routs.f \
   $(SRC)/Common/ncleastsq.f \
   $(SRC)/Common/svdpivot.f \
